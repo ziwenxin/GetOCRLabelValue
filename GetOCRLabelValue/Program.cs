@@ -19,37 +19,64 @@ namespace GetOCRLabelValue
         {
             static void Main(string[] args)
             {
+                string label = "Customer account";
                 string txt = ReadFile();
                 string remainTxt = txt;
                 //find all the numbers after the label, get max
-                string max = FindLabelValue(ref txt, "total");
+                Label max = FindLabelValue(ref txt, label);
 
                 while (true)
                 {
-                    string num = FindLabelValue(ref txt, "total");
-                    if (string.IsNullOrEmpty(num))
+                    Label num = FindLabelValue(ref txt, label);
+                    if (num == null || max == null)
                         break;
-                    if (Convert.ToDouble(num) > Convert.ToDouble(max))
+                    if (Convert.ToDouble(num.Name) > Convert.ToDouble(max.Name))
                         max = num;
                 }
-                Console.WriteLine(max);
+
+                GetFullValue(txt, max);
+                Console.WriteLine(max.Name);
                 Console.ReadKey();
             }
 
-            private static string FindLabelValue(ref string txt, string labelName)
+            private static void GetFullValue(string txt, Label max)
             {
+                int startIdx = max.StartIdx;
+                int endIdx = max.EndIdx;
+                //get all the parts of the result
+                while (true)
+                {
+                    if (startIdx < 0 || txt[startIdx] == ' '||Environment.NewLine.Contains(txt[startIdx]))
+                        break;
+                    startIdx--;
+
+                }
+                while (true)
+                {
+                    if (endIdx > txt.Length || txt[endIdx] == ' ' || Environment.NewLine.Contains(txt[endIdx]))
+                        break;
+                    endIdx++;
+                }
+                max.StartIdx = startIdx+1;
+                max.EndIdx = endIdx - 1;
+                max.Name = txt.Substring(max.StartIdx, max.EndIdx - max.StartIdx);
+            }
+
+            private static Label FindLabelValue(ref string txt, string labelName)
+            {
+                //set the searching label
                 Label label = new Label();
                 label.Name = labelName;
                 int startIdx = txt.IndexOf(label.Name, StringComparison.CurrentCultureIgnoreCase);
                 if (startIdx == -1)
-                    return "";
+                    return null;
                 label.StartIdx = startIdx;
                 label.EndIdx = startIdx + label.Name.Length;
                 //find the spaces before label
                 FindSpaces(txt, label);
                 //get the line number of the label
-                GetLineNumber(txt, label
-                );
+                GetLineNumber(txt, label);
+                int lineCounter = 0;
                 //replace the found label with *
                 StringBuilder sb = new StringBuilder(txt);
                 for (int i = 0; i < labelName.Length; i++)
@@ -67,8 +94,12 @@ namespace GetOCRLabelValue
                     //found the first num after label
                     while (true)
                     {
+                        //Console.WriteLine("$" + txt[startIdx] + "$");
                         if (startIdx >= txt.Length)
-                            break;
+                            goto Finished;
+                        //count the lines
+                        if (Environment.NewLine.Contains(txt[startIdx]))
+                            lineCounter++;
                         if (char.IsNumber(txt[startIdx]))
                         {
                             endIdx = startIdx + 1;
@@ -81,9 +112,9 @@ namespace GetOCRLabelValue
                     //find the end idx
                     while (true)
                     {
+
                         if (endIdx >= txt.Length)
-                            break;
-                        int num = 0;
+                            goto Finished;
                         string character = txt[endIdx].ToString();
                         //it is a part of the amount
                         if (puncuations.Any(c => c == character))
@@ -96,8 +127,6 @@ namespace GetOCRLabelValue
                             break;
                         endIdx++;
                     }
-                    if (startIdx >= txt.Length)
-                        break;
                     //get the number
                     Label number = new Label()
                     {
@@ -108,15 +137,16 @@ namespace GetOCRLabelValue
                     };
                     FindSpaces(txt, number);
                     GetLineNumber(txt, number);
-                    if (number.LineNumber > label.LineNumber + 1)
-                        break;
                     CalculateCost(label, number);
                     numbers.Add(number);
                 }
+                Finished:
                 Label result = numbers.OrderBy(n => n.Cost).FirstOrDefault();
 
+                if (result != null)
+                    return result;
 
-                return result.Name;
+                return null;
             }
 
             private static void CalculateCost(Label label, Label number)
@@ -143,7 +173,7 @@ namespace GetOCRLabelValue
             static string ReadFile()
             {
 
-                return File.ReadAllText("1.txt");
+                return File.ReadAllText("2.txt");
             }
 
             static void GetLineNumber(string txt, Label label)
